@@ -14,9 +14,27 @@ const app = express();
 
 // ---- Security & utility middlewares ----
 app.use(helmet()); // common security headers set karta hai
+
+/**
+ * CLIENT_URL me ek se zyada origins comma-separated ho sakte hain
+ * (e.g. local dev + deployed frontend dono ek saath allow karne ke liye):
+ *   CLIENT_URL=http://localhost:3000,https://havybazzar.vercel.app
+ */
+const allowedOrigins = (process.env.CLIENT_URL || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "*",
+    origin: (origin, callback) => {
+      // origin undefined hota hai server-to-server ya curl requests me —
+      // unhe allow karte hain (browser CORS sirf browser requests pe lagta hai)
+      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error(`CORS: origin ${origin} allowed nahi hai`));
+    },
     credentials: true,
   })
 );
