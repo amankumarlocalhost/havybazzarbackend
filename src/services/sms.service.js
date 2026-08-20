@@ -11,12 +11,14 @@
  * Abhi DEV MODE me ye sirf console pe OTP print karta hai, taaki aap bina
  * real SMS provider ke bhi poora flow test kar sakein.
  *
- * Email OTP ke liye Nodemailer (Gmail SMTP) use ho raha hai —
- * config/mailer.js me transporter lazy-init hota hai.
+ * Email OTP ke liye Resend use ho raha hai — client config/resend.js me
+ * lazy-init hota hai.
  * ---------------------------------------------------------------------------
  */
 
-const { getTransporter } = require('../config/mailer');
+const { getResendClient } = require('../config/resend');
+
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Heavy Bazar <onboarding@resend.dev>';
 
 async function sendOtpSms(phone, otp) {
   if (process.env.NODE_ENV === 'development' || !process.env.SMS_API_KEY) {
@@ -32,23 +34,27 @@ async function sendOtpSms(phone, otp) {
 }
 
 async function sendOtpEmail(email, otp) {
-  // EMAIL_USER/PASS set hai to real email bhejo (dev me bhi) — sirf
+  // RESEND_API_KEY set hai to real email bhejo (dev me bhi) — sirf
   // configure na hone par console fallback taaki bina creds ke bhi
   // baaki flow test ho sake.
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  if (!process.env.RESEND_API_KEY) {
     console.log(`\n📧 [DEV MODE] OTP for ${email}: ${otp}\n`);
     return { success: true, mode: 'console' };
   }
 
-  const transporter = await getTransporter();
-  await transporter.sendMail({
-    from: `"Heavy Bazar" <${process.env.EMAIL_USER}>`,
+  const resend = getResendClient();
+  const { error } = await resend.emails.send({
+    from: FROM_EMAIL,
     to: email,
     subject: 'Your Heavy Bazar OTP',
     html: `<p>Your OTP is <b>${otp}</b>. It expires in 5 minutes. Do not share it with anyone.</p>`,
   });
 
-  return { success: true, mode: 'smtp' };
+  if (error) {
+    throw new Error(`Resend OTP email bhejne me fail hua: ${error.message}`);
+  }
+
+  return { success: true, mode: 'resend' };
 }
 
 module.exports = { sendOtpSms, sendOtpEmail };
