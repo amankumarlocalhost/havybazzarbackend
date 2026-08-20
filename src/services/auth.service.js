@@ -97,8 +97,17 @@ async function signup({ email, phone, password, fullName }) {
   const existing = await User.findOne(
     email ? { email } : { phone }
   );
+
   if (existing) {
-    throw new AppError('This email/phone is already registered.', 409);
+    // Pichli baar OTP bhejte waqt fail ho gaya tha (e.g. SMTP down) to user
+    // "unverified" atka reh jaata hai — usse block karne ke bajaye OTP
+    // dobara bhej ke wahi flow resume karte hain, naya account nahi banate.
+    if (existing.status !== USER_STATUS.UNVERIFIED) {
+      throw new AppError('This email/phone is already registered.', 409);
+    }
+
+    await issueOtp(identifier, OTP_PURPOSE.SIGNUP);
+    return { userId: existing._id, identifier };
   }
 
   const passwordHash = await hashPassword(password);

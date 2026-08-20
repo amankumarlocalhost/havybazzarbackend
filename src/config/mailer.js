@@ -15,12 +15,15 @@ function getTransporter() {
         "EMAIL_USER/EMAIL_PASS .env me set nahi hain — email bhejna kaam nahi karega"
       );
     }
-    // Gmail SMTP + App Password (2FA-enabled Gmail account ke liye)
+    // Gmail SMTP + App Password (2FA-enabled Gmail account ke liye).
+    // Google UI app password ko spaces ke saath dikhata hai (e.g. "abcd efgh
+    // ijkl mnop") — agar wahi copy-paste ho jaaye to SMTP auth fail hota hai
+    // (535 error), isliye yahan whitespace strip kar rahe hain.
     transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        pass: process.env.EMAIL_PASS.replace(/\s+/g, ""),
       },
     });
   }
