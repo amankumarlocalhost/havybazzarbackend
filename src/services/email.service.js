@@ -20,7 +20,7 @@ async function sendEmail(to, subject, body) {
     return { success: true, mode: "console" };
   }
 
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   await transporter.sendMail({
     from: `"Heavy Bazar" <${process.env.EMAIL_USER}>`,
     to,

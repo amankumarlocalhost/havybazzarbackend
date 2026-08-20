@@ -40,7 +40,7 @@ async function sendOtpEmail(email, otp) {
     return { success: true, mode: 'console' };
   }
 
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   await transporter.sendMail({
     from: `"Heavy Bazar" <${process.env.EMAIL_USER}>`,
     to: email,
