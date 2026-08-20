@@ -25,6 +25,10 @@ function getTransporter() {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS.replace(/\s+/g, ""),
       },
+      // Render ke containers me outbound IPv6 route nahi hai, par Node
+      // smtp.gmail.com ko resolve karte waqt IPv6 address prefer karta hai —
+      // isse "ENETUNREACH" hota hai. `family: 4` force IPv4 connection.
+      family: 4,
     });
   }
   return transporter;
