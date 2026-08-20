@@ -65,6 +65,12 @@ app.get("/health", (req, res) => {
   res.status(200).json({ success: true, message: "Heavy Bazar API is running" });
 });
 
+// ---- Root ----
+// Live URL seedha browser me paste karne pe bhi confirm ho jaaye ki API chal rahi hai
+app.get("/", (req, res) => {
+  res.status(200).json({ success: true, message: "Heavy Bazar API is running" });
+});
+
 // ---- Routes ----
 // Jaise jaise modules banenge, yahan register honge
 app.use("/api/v1/auth", require("./routes/auth.routes"));
