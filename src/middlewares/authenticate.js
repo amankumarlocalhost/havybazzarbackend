@@ -1,16 +1,50 @@
 // Ye middleware har "protected" route pe lagega — jaise profile update,
 // bid lagana, listing banana. Header me "Authorization: Bearer <token>"
 // hona chahiye.
+//
+// BYPASS MODE: client se login hataane ke liye — agar valid Bearer token
+// nahi mila, to ek shared guest user auto-provision ho jaata hai aur
+// request usi identity se aage badhti hai. Isse har route (jo pehle
+// authenticate maangta tha) bina login ke chalega, aur downstream code
+// (req.user.userId/roles wagairah) crash nahi karega.
 
 const { verifyAccessToken } = require('../utils/jwt');
 const AppError = require('../utils/AppError');
 const User = require('../models/user.model');
+const { USER_ROLE, USER_STATUS, KYC_STATUS } = require('../constants/enums');
+
+const GUEST_EMAIL = 'guest@heavybazar.local';
+let guestUserPromise = null;
+
+async function getOrCreateGuestUser() {
+  if (!guestUserPromise) {
+    guestUserPromise = (async () => {
+      let guest = await User.findOne({ email: GUEST_EMAIL });
+      if (!guest) {
+        guest = await User.create({
+          email: GUEST_EMAIL,
+          passwordHash: 'no-login-guest-account',
+          fullName: 'Guest User',
+          roles: [USER_ROLE.BUYER, USER_ROLE.SELLER],
+          activeRole: USER_ROLE.BUYER,
+          status: USER_STATUS.ACTIVE,
+          isEmailVerified: true,
+          kycStatus: KYC_STATUS.VERIFIED,
+        });
+      }
+      return guest;
+    })();
+  }
+  return guestUserPromise;
+}
 
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return next(new AppError('You must be logged in.', 401));
+    const guest = await getOrCreateGuestUser();
+    req.user = { userId: guest._id.toString(), activeRole: guest.activeRole, roles: guest.roles };
+    return next();
   }
 
   const token = authHeader.split(' ')[1];
@@ -19,19 +53,18 @@ async function authenticate(req, res, next) {
   try {
     decoded = verifyAccessToken(token);
   } catch (err) {
-    // TokenExpiredError vs invalid — dono ko same treat karte hain user ke liye,
-    // frontend refresh-token endpoint try karega
-    return next(new AppError('Session expired. Please log in again.', 401));
+    const guest = await getOrCreateGuestUser();
+    req.user = { userId: guest._id.toString(), activeRole: guest.activeRole, roles: guest.roles };
+    return next();
   }
 
   // Har request pe DB check isliye zaroori hai — token valid ho sakta hai
   // par beech me admin ne account suspend kar diya ho
   const user = await User.findById(decoded.userId);
-  if (!user) {
-    return next(new AppError('User not found.', 401));
-  }
-  if (user.status === 'suspended') {
-    return next(new AppError('Your account is suspended.', 403));
+  if (!user || user.status === 'suspended') {
+    const guest = await getOrCreateGuestUser();
+    req.user = { userId: guest._id.toString(), activeRole: guest.activeRole, roles: guest.roles };
+    return next();
   }
 
   // req.user hamesha lightweight rahega — poora user document nahi,
