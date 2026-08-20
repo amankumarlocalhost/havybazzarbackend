@@ -4,6 +4,29 @@
 const authService = require('../services/auth.service');
 const catchAsync = require('../utils/catchAsync');
 
+/**
+ * Frontend (Vercel) aur backend (Render) alag-alag domains pe hain, isliye
+ * ye cookie CROSS-SITE request me bhejni padti hai. `sameSite: 'strict'`
+ * (ya 'lax') browsers me cross-site cookie kabhi bhejte hi nahi — isliye
+ * refresh-token hamesha 401 deta tha, chahe login bilkul sahi se hua ho.
+ *
+ * Fix: production me `sameSite: 'none'` + `secure: true` (dono zaroori
+ * hain — browsers SameSite=None ko bina Secure ke reject kar dete hain).
+ * Local dev me localhost HTTPS nahi hota, isliye wahan `secure: true` cookie
+ * set hi nahi hoti — dev me 'lax' + secure:false use karte hain (localhost
+ * frontend/backend alag ports pe hone ke bawajood "same-site" maane jaate
+ * hain, port SameSite policy me matter nahi karta).
+ */
+function getRefreshCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 din
+  };
+}
+
 exports.signup = catchAsync(async (req, res) => {
   const result = await authService.signup(req.body);
   res.status(201).json({
@@ -18,12 +41,7 @@ exports.verifySignupOtp = catchAsync(async (req, res) => {
   const result = await authService.verifySignupOtp(identifier, otp);
 
   // Refresh token httpOnly cookie me — localStorage me nahi (XSS se safe)
-  res.cookie('refreshToken', result.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 din
-  });
+  res.cookie('refreshToken', result.refreshToken, getRefreshCookieOptions());
 
   res.status(200).json({
     success: true,
@@ -42,12 +60,7 @@ exports.login = catchAsync(async (req, res) => {
   const { identifier, password } = req.body;
   const result = await authService.login(identifier, password);
 
-  res.cookie('refreshToken', result.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  res.cookie('refreshToken', result.refreshToken, getRefreshCookieOptions());
 
   res.status(200).json({
     success: true,
